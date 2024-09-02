@@ -3,6 +3,7 @@ from tkinter import messagebox
 import csv
 
 class ExcelApp:
+
     def __init__(self, root):
         self.root = root
         self.root.title("Excel-like Application")
@@ -74,39 +75,75 @@ class ExcelApp:
         for (row, col), entry in self.cells.items():
             entry.config(borderwidth=1, relief="flat")
 
+    def format_bold(self):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+            current_font = entry.cget("font")
+            new_font = ("Arial", 12, "bold" if "bold" not in current_font else "normal")
+            entry.config(font=new_font)
+
+    def format_italic(self):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+            current_font = entry.cget("font")
+            new_font = ("Arial", 12, "italic" if "italic" not in current_font else "normal")
+            entry.config(font=new_font)
+    
+    
     def create_buttons(self):
-        button_frame = tk.Frame(self.root, bg="#f0f0f0", bd=1, relief="solid")
-        button_frame.grid(row=0, column=0, columnspan=11, pady=10, padx=10, sticky="ew")
+            button_frame = tk.Frame(self.root, bg="#f0f0f0", bd=1, relief="solid")
+            button_frame.grid(row=0, column=0, columnspan=11, pady=10, padx=10, sticky="ew")
 
-        save_button = tk.Button(button_frame, text="Save", command=self.save_file, bg="#4CAF50", fg="white", padx=20)
-        save_button.pack(side=tk.LEFT, padx=10, pady=5)
+            save_button = tk.Button(button_frame, text="Save", bg="#4CAF50", fg="white", padx=20)
+            save_button.pack(side=tk.LEFT, padx=10, pady=5)
 
-        load_button = tk.Button(button_frame, text="Load", command=self.load_file, bg="#008CBA", fg="white", padx=20)
-        load_button.pack(side=tk.LEFT, padx=10, pady=5)
+            load_button = tk.Button(button_frame, text="Load",  bg="#008CBA", fg="white", padx=20)
+            load_button.pack(side=tk.LEFT, padx=10, pady=5)
 
-        self.cells = {}  
-        
-        for col in range(10):
-            label = tk.Entry(self.root, text=chr(65 + col), borderwidth=1, relief="solid", bg="#D3D3D3")
-            label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1)  
+            separator = tk.Frame(button_frame, width=2, bg="#d3d3d3", height=40)
+            separator.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.Y)
 
-        for row in range(10):
-            label = tk.Entry(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
-            label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)  
-            label.bind('<Button-1>', self.select_row)
+            format_frame = tk.Frame(button_frame, bg="#f0f0f0")
+            format_frame.pack(side=tk.LEFT, padx=10, pady=5)
 
-        for row in range(10):
+            bold_button = tk.Button(format_frame, text="Bold", command=self.format_bold, bg="#FFC107", fg="black", padx=15)
+            bold_button.pack(side=tk.TOP, padx=5, pady=5)
+
+            italic_button = tk.Button(format_frame, text="Italic", command=self.format_italic, bg="#FFC107", fg="black", padx=15)
+            italic_button.pack(side=tk.TOP, padx=5, pady=5)
+
+
+            self.cells = {}
+
             for col in range(10):
-                entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12))
-                entry.grid(row=row+2, column=col+1, sticky="nsew", padx=1, pady=1)  
-                self.cells[(row + 1, col + 1)] = entry  
-                entry.bind('<Return>', self.process_formula)  
-                entry.bind('<Button-1>', self.select_cell)
+                label = tk.Entry(self.root, text=chr(65 + col), borderwidth=1, relief="solid", bg="#D3D3D3")
+                label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1)
 
-        for i in range(11):  
-            self.root.grid_columnconfigure(i, weight=1)
-        for i in range(12):  
-            self.root.grid_rowconfigure(i, weight=1)
+            for row in range(10):
+                label = tk.Entry(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
+                label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)
+                label.bind('<Button-1>', self.select_row)
+
+            for row in range(10):
+                for col in range(10):
+                    entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12))
+                    entry.grid(row=row+2, column=col+1, sticky="nsew", padx=1, pady=1)
+                    self.cells[(row + 1, col + 1)] = entry
+                    entry.bind('<Return>', self.process_formula)
+                    entry.bind('<Button-1>', self.select_cell)
+
+            for i in range(11):
+                self.root.grid_columnconfigure(i, weight=1)
+            for i in range(12):
+                self.root.grid_rowconfigure(i, weight=1)
+
+
+
+
+
+                
 
     def create_grid(self):
         self.cells = {}  
