@@ -1,21 +1,21 @@
 class UndoRedoManager:
     def __init__(self):
-        self.undo_stack = [] #puni stack sa undo
-        self.redo_stack = [] #puni stack saa redo
+        self.undo_stack = []
+        self.redo_stack = []
 
     def push(self, state):
         self.undo_stack.append(state)
         self.redo_stack.clear()
 
     def undo(self):
-        if self.undo_stack:
+        if len(self.undo_stack) != 0:
             state = self.undo_stack.pop()
             self.redo_stack.append(state)
-            return self.undo_stack[-1] if self.undo_stack else {}
+            return state
         return {}
 
     def redo(self):
-        if self.redo_stack:
+        if len(self.redo_stack) != 0:
             state = self.redo_stack.pop()
             self.undo_stack.append(state)
             return state

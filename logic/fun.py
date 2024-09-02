@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox
 import csv
 from logic.undo_redo import UndoRedoManager
 
+
 class ExcelApp:
     def __init__(self, root):
         self.root = root
@@ -15,6 +16,7 @@ class ExcelApp:
         self.selected_row = None
         self.selected_col = None
         self.selected_cell = None
+
 
     # selekcija
     def start_selection(self, event):
@@ -353,3 +355,4 @@ class ExcelApp:
                         if (row_index, col_index) in self.cells:
                             self.cells[(row_index, col_index)].delete(0, tk.END)
                             self.cells[(row_index, col_index)].insert(0, cell_value)
+
