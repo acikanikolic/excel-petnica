@@ -363,7 +363,7 @@ class ExcelApp:
 
 
     def calculate_sum(self, cell, formula):
-        cell_refs = formula.split('+')
+        cell_refs = formula.split(',')
         total_sum = 0.0
         for cell_ref in cell_refs:
             cell_ref = cell_ref.strip()
@@ -381,7 +381,7 @@ class ExcelApp:
         self.cells[cell].insert(0, str(total_sum))
 
     def calculate_product(self, cell, formula):
-        cell_refs = formula.split('*')
+        cell_refs = formula.split(',')
         total_product = 1.0
         for cell_ref in cell_refs:
             cell_ref = cell_ref.strip()
@@ -575,9 +575,6 @@ class ExcelApp:
         if new_state != self.initial_state:
             self.manager.push(new_state)
 
-
-
-
     def undo_action(self):
         state = self.manager.undo()
         if state is not None:
@@ -592,22 +589,4 @@ class ExcelApp:
                 self.cells[key].delete(0, tk.END)
                 self.cells[key].insert(0, value)
 
-    def save_file(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
-        if file_path:
-            with open(file_path, 'w', newline='') as file:
-                writer = csv.writer(file)
-                for row in range(1, 11):
-                    writer.writerow([self.cells.get((row, col), '').get() for col in range(1, 11)])
-
-    def load_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        if file_path:
-            with open(file_path, 'r') as file:
-                reader = csv.reader(file)
-                for row_index, row in enumerate(reader, start=1):
-                    for col_index, cell_value in enumerate(row, start=1):
-                        if (row_index, col_index) in self.cells:
-                            self.cells[(row_index, col_index)].delete(0, tk.END)
-                            self.cells[(row_index, col_index)].insert(0, cell_value)
 
