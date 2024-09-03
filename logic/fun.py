@@ -6,9 +6,11 @@ from logic.save_and_load import save_file, load_file
 
 class ExcelApp:
     def __init__(self, root):
+        self.cells = {}
         self.root = root
         self.root.title("Excel")
         self.root.geometry("800x600")
+        self.initial_state = {}
 
         self.fonts = ["Arial", "Courier", "Times", "Helvetica", "Verdana"]
         self.font_sizes = ["8", "10", "12", "14", "16", "18", "20", "24", "28", "32", "36"]
@@ -304,39 +306,28 @@ class ExcelApp:
                 entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12))
                 entry.grid(row=row + 2, column=col + 1, sticky="nsew", padx=1, pady=1)
                 self.cells[(row + 1, col + 1)] = entry
+
+                # Bind events to the entry widgets
                 entry.bind('<Return>', self.process_formula)
                 entry.bind('<Button-1>', self.select_cell)
                 entry.bind('<FocusOut>', self.save_state)
+                entry.bind("<FocusIn>", self.save_initial_state)  # Add this line
 
         for i in range(11):
             self.root.grid_columnconfigure(i, weight=1)
         for i in range(12):
             self.root.grid_rowconfigure(i, weight=1)
 
-        def get_cell_coordinates(self, widget):
-            for (row, col), entry in self.cells.items():
-                if entry == widget:
-                    return row, col
-            return None
+    def save_initial_state(self, event=None):
+        # Save the initial state of all cells
+        self.initial_state = {key: entry.get() for key, entry in self.cells.items()}
 
-        def get_cell_value(self, cell_ref):
-            row_col = self.convert_cell_reference(cell_ref)
-            if row_col and row_col in self.cells:
-                return self.cells[row_col].get()
-            return None
-
-        def convert_cell_reference(self, cell_ref):
-            if len(cell_ref) < 2:
-                return None
-
-            col = ord(cell_ref[0].upper()) - ord('A') + 1
-            try:
-                row = int(cell_ref[1:])
+    def get_cell_coordinates(self, widget):
+        for (row, col), entry in self.cells.items():
+            if entry == widget:
                 return row, col
-            except ValueError:
-                return None
+        return None
 
-        # undo i redo (treba se prebaci u odvojeni fajl)
 
 
 
@@ -369,8 +360,6 @@ class ExcelApp:
             self.calculate_power(cell, formula[4:-1])
         else:
             messagebox.showerror("Error", "Invalid formula.")
-
-
 
 
     def calculate_sum(self, cell, formula):
@@ -578,9 +567,16 @@ class ExcelApp:
         except ValueError:
             return None
 
+    def save_initial_state(self, event=None):
+        self.initial_state = {key: entry.get() for key, entry in self.cells.items()}
+
     def save_state(self, event=None):
-        state = {key: entry.get() for key, entry in self.cells.items()}
-        self.manager.push(state)
+        new_state = {key: entry.get() for key, entry in self.cells.items()}
+        if new_state != self.initial_state:
+            self.manager.push(new_state)
+
+
+
 
     def undo_action(self):
         state = self.manager.undo()
