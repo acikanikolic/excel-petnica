@@ -3,6 +3,8 @@ from tkinter import filedialog, messagebox, font, colorchooser
 import csv
 from logic.undo_redo import UndoRedoManager
 from logic.save_and_load import save_file, load_file
+import re
+
 
 class ExcelApp:
     def __init__(self, root):
@@ -45,17 +47,24 @@ class ExcelApp:
             self.update_selection()
 
     def update_selection(self):
-        self.clear_selection()  # Clear previous selection
+        self.clear_selection()
 
+        # Check if selection_start and selection_end are provided
         if self.selection_start and self.selection_end:
-            start_row, start_col = self.selection_start
-            end_row, end_col = self.selection_end
+            start_ref, end_ref = self.selection_start, self.selection_end
+            # Convert cell references to row and column indices
+            start_row_col = self.convert_cell_reference(start_ref)
+            end_row_col = self.convert_cell_reference(end_ref)
 
-            # Determine the selection range
-            for row in range(min(start_row, end_row), max(start_row, end_row) + 1):
-                for col in range(min(start_col, end_col), max(start_col, end_col) + 1):
-                    if (row, col) in self.cells:
-                        self.cells[(row, col)].config(bg="#ADD8E6")  # Highlight color
+            if start_row_col and end_row_col:
+                start_row, start_col = start_row_col
+                end_row, end_col = end_row_col
+
+                # Ensure start_row <= end_row and start_col <= end_col
+                for row in range(min(start_row, end_row), max(start_row, end_row) + 1):
+                    for col in range(min(start_col, end_col), max(start_col, end_col) + 1):
+                        if (row, col) in self.cells:
+                            self.cells[(row, col)].config(bg="#ADD8E6")
 
     def clear_selection(self):
         for (row, col), entry in self.cells.items():
@@ -63,14 +72,14 @@ class ExcelApp:
 
     def select_row(self, event):
         row = int(event.widget.cget("text"))
-        self.clear_selection()  # Clear previous selection
-        self.highlight_row(row)  # Highlight the clicked row
+        self.clear_selection()
+        self.highlight_row(row)
         self.selected_row = row
 
     def select_column(self, event):
-        col = ord(event.widget.cget("text")) - 64  # Convert 'A'-'J' to 1-10
-        self.clear_selection()  # Clear previous selection
-        self.highlight_column(col)  # Highlight the clicked column
+        col = ord(event.widget.cget("text")) - 64
+        self.clear_selection()
+        self.highlight_column(col)
         self.selected_col = col
 
     def highlight_row(self, row):
@@ -90,14 +99,14 @@ class ExcelApp:
     def select_cell(self, event):
         clicked_cell = self.get_cell_coordinates(event.widget)
         if clicked_cell:
-            self.clear_selection()  # Clear previous selection
-            self.highlight_border(clicked_cell)  # Highlight the clicked cell
+            self.clear_selection()
+            self.highlight_border(clicked_cell)
             self.selected_cell = clicked_cell
 
     def highlight_border(self, cell):
         if cell in self.cells:
             entry = self.cells[cell]
-            entry.config(borderwidth=1, relief="solid")  # Add border
+            entry.config(borderwidth=1, relief="solid")
 
     def clear_selection(self):
         for (row, col), entry in self.cells.items():
@@ -328,8 +337,91 @@ class ExcelApp:
                 return row, col
         return None
 
+    def process_cell_input(self, input_value):
+        if input_value.startswith('='):
+            cell_ref = input_value[1:]
+            if self.is_cell_reference(cell_ref):
+                value = self.get_cell_value(cell_ref)
+                return value
+        return input_value
+
+    def is_cell_reference(self, reference):
+        if len(reference) < 2:
+            return False
+        col = reference[0].upper()
+        row: int = reference[1:]
+        return col.isalpha() and row.isdigit()
+
+    def convert_to_indices(self, reference):
+        col = ord(reference[0].upper()) - ord('A')
+        row = int(reference[1:]) - 1
+        return (row, col)
+
+    def get_cell_value_from_ref(self, cell_ref):
+        # Ova funkcija treba da pretvori cell_ref u red i kolonu i da dobije vrednost iz tih koordinata
+        row, col = self.parse_cell_reference(cell_ref)
+        return self.get_cell_value(row, col)
+
+    def parse_cell_reference(self, cell_ref):
+        # Ovo pretvara referencu ćelije (npr. "A1") u redni i kolonski broj
+        # Ovo treba implementirati prema vašoj logici, npr. koristeći ASCII vrednosti za kolone
+        pass
 
 
+
+    def reference_cell(self, formula):
+
+        if formula.lower().startswith('ref(') and formula.endswith(')'):
+
+            reference_cell = formula[4:-1]
+
+            value = self.get_cell_value(reference_cell)
+
+            if value is not None:
+                return value
+            else:
+                messagebox.showerror("Error", f"Vrednost ćelije {reference_cell} nije dostupna.")
+                return None
+        else:
+            messagebox.showerror("Error", "Formula nije u ispravnom formatu. Očekuje se REF(A1).")
+            return None
+
+    def update_cell_value(self, row, col, value):
+        entry = self.cells[(row, col)]
+        if value.startswith('='):
+            formula = value[1:]
+            result = self.process_formula(formula)
+            if result is not None:
+                entry.delete(0, tk.END)
+                entry.insert(0, result)
+                return
+        entry.delete(0, tk.END)
+        entry.insert(0, value)
+
+    def set_cell_value(self, cell, value):
+        if cell in self.cells:
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, value)
+
+    def calculate_obj(self, cell_ref):
+        cell_ref = cell_ref.upper()
+        cell_coords = self.parse_cell_reference(cell_ref)
+        if cell_coords:
+            row, col = cell_coords
+            cell_value = self.get_cell_value(row, col)
+            return cell_value
+        else:
+            return "ERROR"
+
+    def connecting_cell(self, cell_ref):
+        if self.is_cell_reference(cell_ref):
+            value = self.get_cell_value(cell_ref)
+            if value is not None:
+                self.cells[self.current_cell].set(value)
+            else:
+                print(f"Invalid cell reference: {cell_ref}")
+        else:
+            print(f"Invalid cell reference format: {cell_ref}")
 
     def process_formula(self, event):
         widget = event.widget
@@ -342,6 +434,9 @@ class ExcelApp:
             return
 
         formula = formula[1:]
+
+
+
         if formula.lower().startswith('sum(') and formula.endswith(')'):
             self.calculate_sum(cell, formula[4:-1])
         elif formula.lower().startswith('prd(') and formula.endswith(')'):
@@ -358,10 +453,142 @@ class ExcelApp:
             self.calculate_modul(cell, formula[4:-1])
         elif formula.lower().startswith('pow(') and formula.endswith(')'):
             self.calculate_power(cell, formula[4:-1])
+        elif formula.lower().startswith('sumif(') and formula.endswith(')'):
+            self.calculate_sumif(cell, formula[6:-1])
+        elif formula.lower().startswith('prdif(') and formula.endswith(')'):
+            self.calculate_productif(cell, formula[6:-1])
+        elif formula.lower().startswith('avrif(') and formula.endswith(')'):
+            self.calculate_avrif(cell, formula[6:-1])
+        elif formula.lower().startswith('obj(') and formula.endswith(')'):
+            cell_ref = formula[4:-1]  # Uklanja 'OBJ(' i ')'
+            result = self.calculate_obj(cell_ref)
+        else :
+            result = self.get_cell_value(formula)
+            self.cells[cell].delete(0, tk.END)
+
+            self.cells[cell].insert(0, str(result))
+
+    def calculate_sumif(self, cell, formula):
+        first_division = formula.split(';')
+
+
+        if len(first_division) != 2:
+            messagebox.showerror("Error", "sumif formula requires exactly two arguments separated by ';'.")
+            return
+
+        condition = first_division[0].strip()
+        cell_refs = first_division[1].split(',')
+
+        condition_match = re.match(r'^(-?\d+(\.\d+)?)(>|<|=)$', condition)
+        if not condition_match:
+            messagebox.showerror("Error", "Invalid condition format. Correct format: number followed by >, <, or =.")
+            return
+
+        condition_value = float(condition_match.group(1))
+        operator = condition_match.group(3)
+        total_sum = 0.0
+
+        for cell_ref in cell_refs:
+            cell_ref = cell_ref.strip()
+            try:
+                value_str = self.get_cell_value(cell_ref)
+                value = float(value_str)
+
+                if ((operator == '<' and value > condition_value) or
+                        (operator == '>' and value < condition_value) or
+                        (operator == '=' and value == condition_value)):
+                    total_sum += value
+
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid number in cell {cell_ref}.")
+                return
+
+        self.cells[cell].delete(0, tk.END)
+        self.cells[cell].insert(0, str(total_sum))
+
+    def calculate_productif(self, cell, formula):
+        first_division = formula.split(';')
+
+        if len(first_division) != 2:
+            messagebox.showerror("Error", "prdif formula requires exactly two arguments separated by ';'.")
+            return
+
+        condition = first_division[0].strip()
+        cell_refs = first_division[1].split(',')
+
+
+        condition_match = re.match(r'^(-?\d+(\.\d+)?)(>|<|=)$', condition)
+        if not condition_match:
+            messagebox.showerror("Error", "Invalid condition format. Correct format: number followed by >, <, or =.")
+            return
+
+        condition_value = float(condition_match.group(1))
+        operator = condition_match.group(3)
+        total_prd = 1.0
+
+        for cell_ref in cell_refs:
+            cell_ref = cell_ref.strip()
+            try:
+                value_str = self.get_cell_value(cell_ref)
+                value = float(value_str)
+
+
+                if ((operator == '<' and value > condition_value) or
+                        (operator == '>' and value < condition_value) or
+                        (operator == '=' and value == condition_value)):
+                    total_prd *= value
+
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid number in cell {cell_ref}.")
+                return
+
+        self.cells[cell].delete(0, tk.END)
+        self.cells[cell].insert(0, str(total_prd))
+
+    def calculate_avrif(self, cell, formula):
+        first_division = formula.split(';')
+
+
+        if len(first_division) != 2:
+            messagebox.showerror("Error", "avrif formula requires exactly two arguments separated by ';'.")
+            return
+
+        condition = first_division[0].strip()
+        cell_refs = first_division[1].split(',')
+
+        condition_match = re.match(r'^(-?\d+(\.\d+)?)(>|<|=)$', condition)
+        if not condition_match:
+            messagebox.showerror("Error", "Invalid condition format. Correct format: number followed by >, <, or =.")
+            return
+
+        condition_value = float(condition_match.group(1))
+        operator = condition_match.group(3)
+        total_avr = 0.0
+        count = 0
+
+        for cell_ref in cell_refs:
+            cell_ref = cell_ref.strip()
+            try:
+                value_str = self.get_cell_value(cell_ref)
+                value = float(value_str)
+
+                if ((operator == '<' and value > condition_value) or
+                        (operator == '>' and value < condition_value) or
+                        (operator == '=' and value == condition_value)):
+                    total_avr += value
+                    count+=1
+
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid number in cell {cell_ref}.")
+                return
+        if count > 0:
+            average = total_avr / count
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(average))
         else:
-            messagebox.showerror("Error", "Invalid formula.")
+            messagebox.showerror("Error", "No valid cells to average.")
 
-
+    #obične operqcije
     def calculate_sum(self, cell, formula):
         cell_refs = formula.split(',')
         total_sum = 0.0
@@ -550,8 +777,10 @@ class ExcelApp:
                 return row, col
         return None
 
+
     def get_cell_value(self, cell_ref):
         row_col = self.convert_cell_reference(cell_ref)
+        print(row_col)
         if row_col and row_col in self.cells:
             return self.cells[row_col].get()
         return None
@@ -567,8 +796,6 @@ class ExcelApp:
         except ValueError:
             return None
 
-    def save_initial_state(self, event=None):
-        self.initial_state = {key: entry.get() for key, entry in self.cells.items()}
 
     def save_state(self, event=None):
         new_state = {key: entry.get() for key, entry in self.cells.items()}
@@ -588,5 +815,4 @@ class ExcelApp:
             for key, value in state.items():
                 self.cells[key].delete(0, tk.END)
                 self.cells[key].insert(0, value)
-
 
