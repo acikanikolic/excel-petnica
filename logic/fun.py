@@ -6,70 +6,93 @@ class ExcelApp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Excel-like Application")
+        self.root.title("Excel")
         self.root.geometry("800x600")  
         self.create_buttons()  
         self.create_grid()  
 
-        self.selection_start = None
-        self.selection_end = None
+        self.selected_row = None
+        self.selected_col = None
         self.selected_cell = None
 
+    #selekcija
     def start_selection(self, event):
+        print("start")
         cell = self.get_cell_coordinates(event.widget)
         if cell:
             self.selection_start = cell
             self.update_selection()
 
     def extend_selection(self, event):
+        print("ekstend")
         cell = self.get_cell_coordinates(event.widget)
         if cell:
             self.selection_end = cell
             self.update_selection()
 
     def end_selection(self, event):
+        print("end")
         cell = self.get_cell_coordinates(event.widget)
         if cell:
             self.selection_end = cell
             self.update_selection()
 
     def update_selection(self):
-        self.clear_selection()  
+        print("update")
+        self.clear_selection()  # Clear previous selection
+
         if self.selection_start and self.selection_end:
             start_row, start_col = self.selection_start
             end_row, end_col = self.selection_end
+
+            # Determine the selection range
             for row in range(min(start_row, end_row), max(start_row, end_row) + 1):
                 for col in range(min(start_col, end_col), max(start_col, end_col) + 1):
                     if (row, col) in self.cells:
-                        self.cells[(row, col)].config(bg="#ADD8E6") 
+                        self.cells[(row, col)].config(bg="#ADD8E6")  # Highlight color
 
     def clear_selection(self):
+        print("clear")
         for (row, col), entry in self.cells.items():
-            entry.config(bg="white")  
+            entry.config(bg="white")
 
     def select_row(self, event):
         row = int(event.widget.cget("text"))
-        self.clear_selection()  
-        self.highlight_row(row)  
+        self.clear_selection() 
+        self.highlight_row(row)
         self.selected_row = row
 
     def select_column(self, event):
-        col = ord(event.widget.cget("text")) - 64  
-        self.clear_selection()  
-        self.highlight_column(col)  
+        col = ord(event.widget.cget("text")) - 64
+        self.clear_selection()
+        self.highlight_column(col)
         self.selected_col = col
+
+    def highlight_row(self, row):
+        for col in range(1, 11):
+            cell = (row, col)
+            if cell in self.cells:
+                entry = self.cells[cell]
+                entry.config(borderwidth=1, relief="solid")
+
+    def highlight_column(self, col):
+        for row in range(1, 11):
+            cell = (row, col)
+            if cell in self.cells:
+                entry = self.cells[cell]
+                entry.config(borderwidth=1, relief="solid")
 
     def select_cell(self, event):
         clicked_cell = self.get_cell_coordinates(event.widget)
         if clicked_cell:
-            self.clear_selection() 
-            self.highlight_border(clicked_cell)  
+            self.clear_selection()  # Clear previous selection
+            self.highlight_border(clicked_cell)  # Highlight the clicked cell
             self.selected_cell = clicked_cell
 
     def highlight_border(self, cell):
         if cell in self.cells:
             entry = self.cells[cell]
-            entry.config(borderwidth=2, relief="solid")  
+            entry.config(borderwidth=1, relief="solid")  # Add border
 
     def clear_selection(self):
         for (row, col), entry in self.cells.items():
@@ -92,6 +115,7 @@ class ExcelApp:
             entry.config(font=new_font)
     
     
+
     def create_buttons(self):
             button_frame = tk.Frame(self.root, bg="#f0f0f0", bd=1, relief="solid")
             button_frame.grid(row=0, column=0, columnspan=11, pady=10, padx=10, sticky="ew")
@@ -116,10 +140,17 @@ class ExcelApp:
 
 
             self.cells = {}
+            for row in range(10):
+                label = tk.Entry(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
+                label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)  
 
             for col in range(10):
                 label = tk.Entry(self.root, text=chr(65 + col), borderwidth=1, relief="solid", bg="#D3D3D3")
                 label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1)
+                entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12))
+                entry.grid(row=row+2, column=col+1, sticky="nsew", padx=1, pady=1)  
+                self.cells[(row + 1, col + 1)] = entry  
+                entry.bind('<Return>', self.process_formula) 
 
             for row in range(10):
                 label = tk.Entry(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
@@ -151,11 +182,13 @@ class ExcelApp:
         for row in range(10):
             label = tk.Label(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
             label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)  
-            label.configure(width=4)  
+            label.configure(width=4) 
+            label.bind('<Button-1>', self.select_row) 
 
         for col in range(10):
             label = tk.Label(self.root, text=chr(65 + col), borderwidth=1, relief="solid", bg="#D3D3D3")
-            label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1)  
+            label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1) 
+            label.bind('<Button-1>', self.select_column) 
 
         for row in range(10):
             for col in range(10):
