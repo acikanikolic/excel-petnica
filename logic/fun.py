@@ -2,16 +2,20 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, font, colorchooser
 import csv
 from .undo_and_redo import UndoRedoManager
-from .save_and_load import save_file, load_file
 import re
 
 class ExcelApp:
     def __init__(self, root):
+        self.col_count = 20
+        self.row_count = 20
+
+        self.cells = {}
         self.root = root
         self.root.title("Excel")
         self.root.geometry("800x600")
 
         self.root.configure(bg='#a0db8e')
+        self.initial_state = {}
 
         self.fonts = ["Arial", "Courier", "Times", "Helvetica", "Verdana"]
         self.font_sizes = ["8", "10", "12", "14", "16", "18", "20", "24", "28", "32", "36"]
@@ -20,42 +24,33 @@ class ExcelApp:
         self.selected_font_size = tk.StringVar(value=self.font_sizes[2])
 
         self.manager = UndoRedoManager()
-        self.create_buttons()
-        self.create_grid()
+        
+        
+
+        #Mila
+        self.create_canvas_and_scrollbars()
 
         self.selected_row = None
         self.selected_col = None
         self.selected_cell = None
 
-    def start_selection(self, event):
-        cell = self.get_cell_coordinates(event.widget)
-        if cell:
-            self.selection_start = cell
-            self.update_selection()
 
-    def extend_selection(self, event):
-        cell = self.get_cell_coordinates(event.widget)
-        if cell:
-            self.selection_end = cell
-            self.update_selection()
+        self.grid_frame = tk.Frame(self.canvas, bg="#f0f0f0")
+        self.canvas.create_window((0, 0), window=self.grid_frame, anchor="nw")
 
-    def end_selection(self, event):
-        cell = self.get_cell_coordinates(event.widget)
-        if cell:
-            self.selection_end = cell
-            self.update_selection()
+        self.grid_frame.update_idletasks()
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
-    def update_selection(self):
-        self.clear_selection()  
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
 
-        if self.selection_start and self.selection_end:
-            start_row, start_col = self.selection_start
-            end_row, end_col = self.selection_end
+        self.cell_width = 10
+        self.cell_height = 2
 
-            for row in range(min(start_row, end_row), max(start_row, end_row) + 1):
-                for col in range(min(start_col, end_col), max(start_col, end_col) + 1):
-                    if (row, col) in self.cells:
-                        self.cells[(row, col)].config(bg="#ADD8E6") 
+        self.create_buttons()
+        self.create_grid()
+
+    
 
     def select_row(self, event):
         self.clear_selection() 
@@ -67,17 +62,72 @@ class ExcelApp:
         self.clear_selection()  
         col = ord(event.widget.cget("text")) - 64
         self.highlight_column(col) 
-        self.selected_col = col
+        self.grid_frame = tk.Frame(self.canvas, bg="#f0f0f0")
+        self.canvas.create_window((0, 0), window=self.grid_frame, anchor="nw")
+
+        self.grid_frame.update_idletasks()
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+
+        self.cell_width = 10
+        self.cell_height = 2
+
+        #self.create_buttons()
+        #self.create_grid()
+
+
+    
+    #save and load
+    def save_file(self, cells):
+        file_path = tk.filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", ".csv")])
+        if file_path:
+            try:
+                with open(file_path, 'w', newline='') as file:
+                    writer = csv.writer(file)
+                    for row in range(1, self.row_count):
+                        row_data = []
+                        for col in range(1, self.col_count):
+                            value = cells[(row, col)].get()
+                            row_data.append(value)
+                        writer.writerow(row_data)
+                messagebox.showinfo("Success", "File saved successfully.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save file: {str(e)}")
+
+
+    def load_file(self, cells):
+        file_path = tk.filedialog.askopenfilename(filetypes=[("CSV files", ".csv")])
+        if file_path:
+            try:
+                with open(file_path, 'r') as file:
+                    reader = csv.reader(file)
+                    for row_idx, row_data in enumerate(reader):
+                        for col_idx, value in enumerate(row_data):
+                            cells[(row_idx + 1, col_idx + 1)].delete(0, tk.END)
+                            cells[(row_idx + 1, col_idx + 1)].insert(0, value)
+                messagebox.showinfo("Success", "File loaded successfully.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load file: {str(e)}")
+
+    
+
+    def find_col_index(self, event):
+        if len(event.widget.cget("text")) == 1:
+            return ord(event.widget.cget("text")) - 64
+        else:
+            return (ord(event.widget.cget("text")[0]) - 64) * 26 + ord(event.widget.cget("text")[1]) - 64
 
     def highlight_row(self, row):
-        for col in range(1, 11):
+        for col in range(1, self.col_count):
             cell = (row, col)
             if cell in self.cells:
                 entry = self.cells[cell]
                 entry.config(borderwidth=1, relief="solid")
 
     def highlight_column(self, col):
-        for row in range(1, 11):
+        for row in range(1, self.row_count):
             cell = (row, col)
             if cell in self.cells:
                 entry = self.cells[cell]
@@ -103,6 +153,125 @@ class ExcelApp:
         self.selected_col = None
         self.selected_cell = None
 
+
+    #scrollbar
+
+    def update_scrollregion(self):
+        self.canvas.update_idletasks()
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+
+    def on_vertical_scroll(self, *args):
+        self.canvas.yview_moveto(float(args[1]))
+        self.check_vertical_scroll_end()
+
+    def check_vertical_scroll_end(self):
+        pos = self.canvas.yview()[1]
+        
+        if pos >= 1.0:
+            self.add_more_rows()
+
+    def on_horizontal_scroll(self, *args):
+        self.canvas.xview_moveto(float(args[1]))
+        self.check_horizontal_scroll_end()
+
+    def check_horizontal_scroll_end(self):
+        pos = self.canvas.xview()[1]
+
+        if pos >= 1.0:
+            self.add_more_columns()
+
+    def add_more_columns(self):
+            dodate_kolone = 2
+            self.col_count += dodate_kolone
+
+            if 65 + self.col_count > 91:
+                first_letter = chr((self.col_count - 1) // 26 + 64)
+            else:
+                first_letter = ""
+
+
+            for col in range(self.col_count - dodate_kolone, self.col_count):
+                
+                label = tk.Label(self.grid_frame, text=first_letter + chr((col % 26) + 65), 
+                             width=self.cell_width, height=self.cell_height, font=("Arial",12,"bold"), borderwidth=1, highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+                label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1)
+                label.bind('<Button-1>', self.select_column)
+
+            for row in range(0, self.row_count):
+                for col in range(self.col_count - dodate_kolone, self.col_count):
+                    entry = tk.Entry(self.grid_frame, width=self.cell_width, font=("Arial", 12), justify="center", relief="flat" if self.selected_cell or self.selected_col or self.selected_row else "sunken", cursor="hand2")
+                    
+                    entry.grid(row = row + 2, column=col+1, sticky="nsew", padx=1, pady=1)
+                    self.cells[(row + 1, col + 1)] = entry
+                    entry.bind('<Return>', self.process_formula)
+                    entry.bind('<Button-1>', self.select_cell)
+
+            if self.selected_row != None:
+                row = self.selected_row
+                for col in range(self.col_count - dodate_kolone, self.col_count):
+                    entry = self.cells[(row, col)]
+                    entry.config(borderwidth=1, relief="solid")
+
+
+            self.update_scrollregion()
+
+    def add_more_rows(self):
+        dodati_redovi = 2
+        self.row_count += dodati_redovi
+
+        for row in range(self.row_count - dodati_redovi, self.row_count):
+            label = tk.Label(self.grid_frame, text=str(row + 1),
+                             width=self.cell_width, height=self.cell_height, font=("Arial",12,"bold"), highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", borderwidth=1, relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+            
+            label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)
+            label.configure(width=4)
+            label.bind('<Button-1>', self.select_row)
+
+        for col in range(0, self.col_count):
+                for row in range(self.row_count - dodati_redovi, self.row_count):
+                    entry = tk.Entry(self.grid_frame, width=self.cell_width, font=("Arial", 12), justify="center", relief="flat" if self.selected_cell or self.selected_col or self.selected_row else "sunken", cursor="hand2")
+                    
+                    entry.grid(row = row + 2, column=col+1, sticky="nsew", padx=1, pady=1)
+                    self.cells[(row + 1, col + 1)] = entry
+                    entry.bind('<Return>', self.process_formula)
+                    entry.bind('<Button-1>', self.select_cell)
+
+        if self.selected_col != None:
+            col = self.selected_col
+            for row in range(self.row_count - dodati_redovi, self.row_count):
+                entry = self.cells[(row, col)]
+                entry.config(borderwidth=1, relief="solid")
+
+        self.update_scrollregion()
+
+    def on_canvas_resize(self, event):
+        h = self.root.winfo_height() - 165
+        w = self.root.winfo_width() - 20
+        self.canvas.config(width=w, height=h)
+        self.canvas.update_idletasks() 
+        self.canvas.configure(scrollregion=self.grid_frame.bbox("all"))
+
+    def create_canvas_and_scrollbars(self):
+        self.canvas = tk.Canvas(self.root, height=self.root.winfo_height() - 165, width=self.root.winfo_width() - 20)
+        self.canvas.grid(row=1, column=0)
+
+        self.v_scroll = tk.Scrollbar(self.root, orient="vertical", command=self.on_vertical_scroll)
+        self.v_scroll.grid(row=1, column=1, sticky="ns")
+        
+        self.h_scroll = tk.Scrollbar(self.root, orient="horizontal", command=self.on_horizontal_scroll)
+        self.h_scroll.grid(row=2, column=0, sticky="ew") 
+
+        self.canvas.configure(yscrollcommand=self.v_scroll.set, xscrollcommand=self.h_scroll.set)
+
+        self.root.grid_rowconfigure(1, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+
+        self.canvas.bind("<Configure>", self.on_canvas_resize)
+
+        self.update_scrollregion()
+
+
+    #Milica
     def format_bold(self):
         if self.selected_cell:
             row, col = self.selected_cell
@@ -218,7 +387,7 @@ class ExcelApp:
         save_button = tk.Button(
             button_frame,
             text="Save",
-            command=lambda: save_file(self.cells),
+            command=lambda: self.save_file(self.cells),
             padx=5,
             pady=5,
             bg="#4CAF50",
@@ -233,7 +402,7 @@ class ExcelApp:
         load_button = tk.Button(
             button_frame,
             text="Load",
-            command=lambda: load_file(self.cells),
+            command=lambda: self.load_file(self.cells),
             padx=5,
             pady=5,
             bg="#008CBA",
@@ -306,56 +475,69 @@ class ExcelApp:
     def create_grid(self):
         self.cells = {}
 
-        for row in range(10):
-            label = tk.Label(self.root, text=str(row + 1), font=("Arial",12,"bold"), highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", borderwidth=1, relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+        for row in range(self.row_count):
+            #label = tk.Label(self.root, text=str(row + 1), font=("Arial",12,"bold"), highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", borderwidth=1, relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+            label = tk.Label(self.grid_frame, text=str(row + 1),
+                             width=self.cell_width, height=self.cell_height, font=("Arial",12,"bold"), highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", borderwidth=1, relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+            
             label.grid(row=row + 2, column=0, sticky="nsew", padx=1, pady=1)
             label.configure(width=4)
             label.bind('<Button-1>', self.select_row)
 
-        for col in range(10):
-            label = tk.Label(self.root, text=chr(65 + col), font=("Arial",12,"bold"), borderwidth=1, highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+        for col in range(self.col_count):
+            label = tk.Label(self.grid_frame, text=chr(65 + col), 
+                             width=self.cell_width, height=self.cell_height, font=("Arial",12,"bold"), borderwidth=1, highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+            #label = tk.Label(self.root, text=chr(65 + col), font=("Arial",12,"bold"), borderwidth=1, highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
             label.grid(row=1, column=col + 1, sticky="nsew", padx=1, pady=1)
             label.bind('<Button-1>', self.select_column)
 
-        for row in range(10):
-            for col in range(10):
-                entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12), cursor="hand2")
+        for row in range(self.row_count):
+            for col in range(self.col_count):
+                entry = tk.Entry(self.grid_frame, width=self.cell_width, justify="center", font=("Arial", 12), cursor="hand2")
+                #entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12), cursor="hand2")
                 entry.grid(row=row + 2, column=col + 1, sticky="nsew", padx=1, pady=1)
                 self.cells[(row + 1, col + 1)] = entry
+
                 entry.bind('<Return>', self.process_formula)
                 entry.bind('<Button-1>', self.select_cell)
                 entry.bind('<FocusOut>', self.save_state)
+                entry.bind("<FocusIn>", self.save_initial_state)
 
-        for i in range(11):
+        for i in range(self.col_count):
             self.root.grid_columnconfigure(i, weight=1)
-        for i in range(12):
+        for i in range(self.row_count):
             self.root.grid_rowconfigure(i, weight=1)
 
-        def get_cell_coordinates(self, widget):
+
+    def save_initial_state(self, event=None):
+        self.initial_state = {key: entry.get() for key, entry in self.cells.items()}
+
+
+    def get_cell_coordinates(self, widget):
             for (row, col), entry in self.cells.items():
                 if entry == widget:
                     return row, col
             return None
 
-        def get_cell_value(self, cell_ref):
-            row_col = self.convert_cell_reference(cell_ref)
-            if row_col and row_col in self.cells:
-                return self.cells[row_col].get()
+    def get_cell_value(self, cell_ref):
+        row_col = self.convert_cell_reference(cell_ref)
+        if row_col and row_col in self.cells:
+            return self.cells[row_col].get()
+        return None
+
+    def convert_cell_reference(self, cell_ref):
+        if len(cell_ref) < 2:
             return None
 
-        def convert_cell_reference(self, cell_ref):
-            if len(cell_ref) < 2:
-                return None
-
-            col = ord(cell_ref[0].upper()) - ord('A') + 1
-            try:
-                row = int(cell_ref[1:])
-                return row, col
-            except ValueError:
-                return None
+        col = ord(cell_ref[0].upper()) - ord('A') + 1
+        try:
+            row = int(cell_ref[1:])
+            return row, col
+        except ValueError:
+            return None
 
 
-
+    #formule
 
     def process_formula(self, event):
         widget = event.widget
@@ -721,9 +903,13 @@ class ExcelApp:
         except ValueError:
             return None
 
+    def save_initial_state(self, event=None):
+        self.initial_state = {key: entry.get() for key, entry in self.cells.items()}
+
     def save_state(self, event=None):
-        state = {key: entry.get() for key, entry in self.cells.items()}
-        self.manager.push(state)
+        new_state = {key: entry.get() for key, entry in self.cells.items()}
+        if new_state != self.initial_state:
+            self.manager.push(new_state)
 
     def undo_action(self):
         state = self.manager.undo()
@@ -739,21 +925,37 @@ class ExcelApp:
                 self.cells[key].delete(0, tk.END)
                 self.cells[key].insert(0, value)
 
-    def save_file(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
-        if file_path:
-            with open(file_path, 'w', newline='') as file:
-                writer = csv.writer(file)
-                for row in range(1, 11):
-                    writer.writerow([self.cells.get((row, col), '').get() for col in range(1, 11)])
 
-    def load_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        if file_path:
-            with open(file_path, 'r') as file:
-                reader = csv.reader(file)
-                for row_index, row in enumerate(reader, start=1):
-                    for col_index, cell_value in enumerate(row, start=1):
-                        if (row_index, col_index) in self.cells:
-                            self.cells[(row_index, col_index)].delete(0, tk.END)
-                            self.cells[(row_index, col_index)].insert(0, cell_value)
+
+
+    #save and load
+    # #def save_file(self, cells):
+    #     #file_path = tk.filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", ".csv")])
+    #     if file_path:
+    #         try:
+    #             with open(file_path, 'w', newline='') as file:
+    #                 writer = csv.writer(file)
+    #                 for row in range(1, self.row_count):
+    #                     row_data = []
+    #                     for col in range(1, self.col_count):
+    #                         value = cells[(row, col)].get()
+    #                         row_data.append(value)
+    #                     writer.writerow(row_data)
+    #             messagebox.showinfo("Success", "File saved successfully.")
+    #         except Exception as e:
+    #             messagebox.showerror("Error", f"Failed to save file: {str(e)}")
+
+
+    # #def load_file(self, cells):
+    #     file_path = tk.filedialog.askopenfilename(filetypes=[("CSV files", ".csv")])
+    #     if file_path:
+    #         try:
+    #             with open(file_path, 'r') as file:
+    #                 reader = csv.reader(file)
+    #                 for row_idx, row_data in enumerate(reader):
+    #                     for col_idx, value in enumerate(row_data):
+    #                         cells[(row_idx + 1, col_idx + 1)].delete(0, tk.END)
+    #                         cells[(row_idx + 1, col_idx + 1)].insert(0, value)
+    #             messagebox.showinfo("Success", "File loaded successfully.")
+    #         except Exception as e:
+    #             messagebox.showerror("Error", f"Failed to load file: {str(e)}")
