@@ -1,71 +1,72 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox, font, colorchooser
 import csv
+from .undo_and_redo import UndoRedoManager
+from .save_and_load import save_file, load_file
+import re
 
 class ExcelApp:
-
     def __init__(self, root):
         self.root = root
         self.root.title("Excel")
-        self.root.geometry("800x600")  
-        self.create_buttons()  
-        self.create_grid()  
+        self.root.geometry("800x600")
+
+        self.root.configure(bg='#a0db8e')
+
+        self.fonts = ["Arial", "Courier", "Times", "Helvetica", "Verdana"]
+        self.font_sizes = ["8", "10", "12", "14", "16", "18", "20", "24", "28", "32", "36"]
+
+        self.selected_font = tk.StringVar(value=self.fonts[0])
+        self.selected_font_size = tk.StringVar(value=self.font_sizes[2])
+
+        self.manager = UndoRedoManager()
+        self.create_buttons()
+        self.create_grid()
 
         self.selected_row = None
         self.selected_col = None
         self.selected_cell = None
 
-    #selekcija
     def start_selection(self, event):
-        print("start")
         cell = self.get_cell_coordinates(event.widget)
         if cell:
             self.selection_start = cell
             self.update_selection()
 
     def extend_selection(self, event):
-        print("ekstend")
         cell = self.get_cell_coordinates(event.widget)
         if cell:
             self.selection_end = cell
             self.update_selection()
 
     def end_selection(self, event):
-        print("end")
         cell = self.get_cell_coordinates(event.widget)
         if cell:
             self.selection_end = cell
             self.update_selection()
 
     def update_selection(self):
-        print("update")
-        self.clear_selection()  # Clear previous selection
+        self.clear_selection()  
 
         if self.selection_start and self.selection_end:
             start_row, start_col = self.selection_start
             end_row, end_col = self.selection_end
 
-            # Determine the selection range
             for row in range(min(start_row, end_row), max(start_row, end_row) + 1):
                 for col in range(min(start_col, end_col), max(start_col, end_col) + 1):
                     if (row, col) in self.cells:
-                        self.cells[(row, col)].config(bg="#ADD8E6")  # Highlight color
-
-    def clear_selection(self):
-        print("clear")
-        for (row, col), entry in self.cells.items():
-            entry.config(bg="white")
+                        self.cells[(row, col)].config(bg="#ADD8E6") 
 
     def select_row(self, event):
-        row = int(event.widget.cget("text"))
         self.clear_selection() 
-        self.highlight_row(row)
+        row = int(event.widget.cget("text"))
+        self.highlight_row(row) 
         self.selected_row = row
 
     def select_column(self, event):
+        self.clear_selection()  
         col = ord(event.widget.cget("text")) - 64
-        self.clear_selection()
-        self.highlight_column(col)
+        self.highlight_column(col) 
         self.selected_col = col
 
     def highlight_row(self, row):
@@ -85,18 +86,22 @@ class ExcelApp:
     def select_cell(self, event):
         clicked_cell = self.get_cell_coordinates(event.widget)
         if clicked_cell:
-            self.clear_selection()  # Clear previous selection
-            self.highlight_border(clicked_cell)  # Highlight the clicked cell
+            self.clear_selection()  
+            self.highlight_border(clicked_cell)  
             self.selected_cell = clicked_cell
 
     def highlight_border(self, cell):
         if cell in self.cells:
             entry = self.cells[cell]
-            entry.config(borderwidth=1, relief="solid")  # Add border
+            entry.config(borderwidth=1, relief="solid")  
 
     def clear_selection(self):
         for (row, col), entry in self.cells.items():
             entry.config(borderwidth=1, relief="flat")
+
+        self.selected_row = None
+        self.selected_col = None
+        self.selected_cell = None
 
     def format_bold(self):
         if self.selected_cell:
@@ -113,95 +118,244 @@ class ExcelApp:
             current_font = entry.cget("font")
             new_font = ("Arial", 12, "italic" if "italic" not in current_font else "normal")
             entry.config(font=new_font)
+
+    def underline_text(self):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+
+            current_font = font.Font(font=entry.cget("font"))
+            underline = current_font.cget("underline")
+
+            current_font.configure(underline=0 if underline else 1)
+            entry.config(font=current_font)
+
+    def change_font(self, selected_font):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+
+            current_font = font.Font(font=entry.cget("font"))
+            current_font.configure(family=selected_font)
+
+            entry.config(font=current_font)
+
+    def change_font_size(self, selected_size):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+
+            current_font = font.Font(font=entry.cget("font"))
+            current_font.configure(size=int(selected_size))
+
+            entry.config(font=current_font)
+
+    def change_text_color(self):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+
+            color = colorchooser.askcolor()[1]
+            if color:
+                entry.config(fg=color)
+
+    
+    def change_cell_color(self):
+        color = colorchooser.askcolor()[1]
+        if not color:
+            return
+
+        if self.selected_cell:
+            row, col = self.selected_cell
+            self.cells[(row, col)].config(bg=color)
+
+        if hasattr(self, 'selected_row'):
+            self.highlight_row(self.selected_row)
+            for col in range(1, 11): 
+                cell = (self.selected_row, col)
+                if cell in self.cells:
+                    self.cells[cell].config(bg=color)
+
+   
+        if hasattr(self, 'selected_col'):
+            self.highlight_column(self.selected_col)
+            for row in range(1, 11):  
+                cell = (row, self.selected_col)
+                if cell in self.cells:
+                    self.cells[cell].config(bg=color)
+
     
     
+    def align_left(self):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+            entry.config(justify="left")
+
+    def align_center(self):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+            entry.config(justify="center")
+
+    def align_right(self):
+        if self.selected_cell:
+            row, col = self.selected_cell
+            entry = self.cells[(row, col)]
+            entry.config(justify="right")
 
     def create_buttons(self):
-            button_frame = tk.Frame(self.root, bg="#f0f0f0", bd=1, relief="solid")
-            button_frame.grid(row=0, column=0, columnspan=11, pady=10, padx=10, sticky="ew")
+        self.cells = {}
 
-            save_button = tk.Button(button_frame, text="Save", bg="#4CAF50", fg="white", padx=20)
-            save_button.pack(side=tk.LEFT, padx=10, pady=5)
+        button_frame = tk.Frame(self.root, bg="#3B3B3B", bd=1, relief="solid")
+        button_frame.grid(row=0, column=0, columnspan=11, pady=10, padx=10, sticky="ew")
 
-            load_button = tk.Button(button_frame, text="Load",  bg="#008CBA", fg="white", padx=20)
-            load_button.pack(side=tk.LEFT, padx=10, pady=5)
+        for i in range(9):
+            button_frame.grid_columnconfigure(i, weight=1)  
+        for i in range(3):
+            button_frame.grid_rowconfigure(i, weight=1)  
 
-            separator = tk.Frame(button_frame, width=2, bg="#d3d3d3", height=40)
-            separator.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.Y)
+        save_button = tk.Button(
+            button_frame,
+            text="Save",
+            command=lambda: save_file(self.cells),
+            padx=5,
+            pady=5,
+            bg="#4CAF50",
+            fg="white",
+            relief='flat', 
+            bd=0,
+            cursor="hand2",
+            font=("Arial",10,"bold")
+        )
+        save_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
 
-            format_frame = tk.Frame(button_frame, bg="#f0f0f0")
-            format_frame.pack(side=tk.LEFT, padx=10, pady=5)
-
-            bold_button = tk.Button(format_frame, text="Bold", command=self.format_bold, bg="#FFC107", fg="black", padx=15)
-            bold_button.pack(side=tk.TOP, padx=5, pady=5)
-
-            italic_button = tk.Button(format_frame, text="Italic", command=self.format_italic, bg="#FFC107", fg="black", padx=15)
-            italic_button.pack(side=tk.TOP, padx=5, pady=5)
-
-
-            self.cells = {}
-            for row in range(10):
-                label = tk.Entry(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
-                label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)  
-
-            for col in range(10):
-                label = tk.Entry(self.root, text=chr(65 + col), borderwidth=1, relief="solid", bg="#D3D3D3")
-                label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1)
-                entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12))
-                entry.grid(row=row+2, column=col+1, sticky="nsew", padx=1, pady=1)  
-                self.cells[(row + 1, col + 1)] = entry  
-                entry.bind('<Return>', self.process_formula) 
-
-            for row in range(10):
-                label = tk.Entry(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
-                label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)
-                label.bind('<Button-1>', self.select_row)
-
-            for row in range(10):
-                for col in range(10):
-                    entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12))
-                    entry.grid(row=row+2, column=col+1, sticky="nsew", padx=1, pady=1)
-                    self.cells[(row + 1, col + 1)] = entry
-                    entry.bind('<Return>', self.process_formula)
-                    entry.bind('<Button-1>', self.select_cell)
-
-            for i in range(11):
-                self.root.grid_columnconfigure(i, weight=1)
-            for i in range(12):
-                self.root.grid_rowconfigure(i, weight=1)
+        load_button = tk.Button(
+            button_frame,
+            text="Load",
+            command=lambda: load_file(self.cells),
+            padx=5,
+            pady=5,
+            bg="#008CBA",
+            fg="white",
+            bd=0,
+            cursor="hand2",
+            font=("Arial",10,"bold")
+        )
+        load_button.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
 
 
+        undo_button = tk.Button(button_frame, text="<-", command=self.undo_action, cursor="hand2", bd=0, bg="black", fg="white", padx=20, font=("Arial",10,"bold"))
+        undo_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+
+        redo_button = tk.Button(button_frame, text="->", command=self.redo_action, cursor="hand2", bd=0, bg="black", fg="white", padx=20, font=("Arial",10,"bold"))
+        redo_button.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+
+        font_menu = tk.OptionMenu(button_frame, self.selected_font, *self.fonts, command=self.change_font)
+        font_menu.grid(row=0, column=2, padx=5, pady=5, columnspan=2, sticky="ew")
+
+        font_menu.config(bg="white", fg="black", bd=0, font=("Arial",11,"bold"))
+
+        font_size_menu = tk.OptionMenu(button_frame, self.selected_font_size, *self.font_sizes, command=self.change_font_size)
+        font_size_menu.grid(row=0, column=4, padx=5, pady=5, sticky="ew")
+
+        font_size_menu.config(bg="white", fg="black", bd=0, font=("Arial",11,"bold"))
+
+        color_button = tk.Button(button_frame, text="Text Color", command=self.change_text_color, bg="#FFC107", bd=0, fg="white", padx=20, cursor="hand2", font=("Arial",11,"bold"))
+        color_button.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
+
+        bold_button = tk.Button(button_frame, cursor="hand2", bd=0, text="Bold", font=("Arial",11,"bold"), command=self.format_bold, bg="#231256", fg="white", padx=15)
+        bold_button.grid(row=1, column=2, padx=5, pady=5, sticky="ew")
+
+        italic_button = tk.Button(button_frame, cursor="hand2", bd=0, text="Italic", font=("Arial",11,"italic"), command=self.format_italic, bg="#b35fc8", fg="white", padx=15)
+        italic_button.grid(row=1, column=3, padx=5, pady=5, sticky="ew")
+
+        underline_button = tk.Button(button_frame, cursor="hand2", bd=0, text="Underline", font=("Arial",11,"underline"), command=self.underline_text, bg="#e44ec7", fg="white", padx=15)
+        underline_button.grid(row=1, column=4, padx=5, pady=5, sticky="ew")
+
+        cell_color_button = tk.Button(button_frame, text="Cell Color", command=self.change_cell_color,font=("Arial",11,"bold"), bg="#FFC107", fg="white", cursor="hand2", bd=0, padx=20)
+        cell_color_button.grid(row=1, column=5, padx=5, pady=5, sticky="ew")
+
+        font_label = tk.Label(button_frame, text="Font", font=("Arial",12), bg="#3B3B3B", fg="#D3D3D3")
+        font_label.grid(row=2, column=2, padx=5, pady=5, columnspan=4, sticky="ew")
+
+        left_align_button = tk.Button(button_frame, text="Left", cursor="hand2", bd=0, font=("Arial",11,"bold"), command=self.align_left, bg="#e4594e", fg="white", padx=10)
+        left_align_button.grid(row=1, column=6, padx=5, pady=5, sticky="ew")
+
+        center_align_button = tk.Button(button_frame, text="Center", cursor="hand2", bd=0, font=("Arial",11,"bold"), command=self.align_center, bg="black", fg="white", padx=10)
+        center_align_button.grid(row=1, column=7, padx=5, pady=5, sticky="ew")
+
+        right_align_button = tk.Button(button_frame, text="Right", cursor="hand2", bd=0, font=("Arial",11,"bold"), command=self.align_right, bg="#e4594e", fg="white", padx=10)
+        right_align_button.grid(row=1, column=8, padx=5, pady=5, sticky="ew")
+
+        align_label = tk.Label(button_frame, font=("Arial",12), text="Alignment", bg="#3B3B3B", fg="#D3D3D3")
+        align_label.grid(row=2, column=6, padx=5, pady=5, columnspan=3, sticky="ew")
+
+        file_label = tk.Label(button_frame, font=("Arial",12), text="File", bg="#3B3B3B", fg="#D3D3D3")
+        file_label.grid(row=2, column=0, padx=5, pady=5,  sticky="ew")
+
+        history_label = tk.Label(button_frame, font=("Arial",12), text="History", bg="#3B3B3B", fg="#D3D3D3")
+        history_label.grid(row=2, column=1, padx=5, pady=5,  sticky="ew")
 
 
 
-                
+
+        
+
 
     def create_grid(self):
-        self.cells = {}  
+        self.cells = {}
 
         for row in range(10):
-            label = tk.Label(self.root, text=str(row + 1), borderwidth=1, relief="solid", bg="#D3D3D3")
-            label.grid(row=row+2, column=0, sticky="nsew", padx=1, pady=1)  
-            label.configure(width=4) 
-            label.bind('<Button-1>', self.select_row) 
+            label = tk.Label(self.root, text=str(row + 1), font=("Arial",12,"bold"), highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", borderwidth=1, relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+            label.grid(row=row + 2, column=0, sticky="nsew", padx=1, pady=1)
+            label.configure(width=4)
+            label.bind('<Button-1>', self.select_row)
 
         for col in range(10):
-            label = tk.Label(self.root, text=chr(65 + col), borderwidth=1, relief="solid", bg="#D3D3D3")
-            label.grid(row=1, column=col+1, sticky="nsew", padx=1, pady=1) 
-            label.bind('<Button-1>', self.select_column) 
+            label = tk.Label(self.root, text=chr(65 + col), font=("Arial",12,"bold"), borderwidth=1, highlightbackground="#FFFFFF", highlightcolor="#FFFFFF", relief="flat", fg="#FFFFFF", bg="#2E8B57", cursor="hand2")
+            label.grid(row=1, column=col + 1, sticky="nsew", padx=1, pady=1)
+            label.bind('<Button-1>', self.select_column)
 
         for row in range(10):
             for col in range(10):
-                entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12))
-                entry.grid(row=row+2, column=col+1, sticky="nsew", padx=1, pady=1)  
-                self.cells[(row + 1, col + 1)] = entry  
-                entry.bind('<Return>', self.process_formula)  
+                entry = tk.Entry(self.root, width=10, justify="center", font=("Arial", 12), cursor="hand2")
+                entry.grid(row=row + 2, column=col + 1, sticky="nsew", padx=1, pady=1)
+                self.cells[(row + 1, col + 1)] = entry
+                entry.bind('<Return>', self.process_formula)
                 entry.bind('<Button-1>', self.select_cell)
+                entry.bind('<FocusOut>', self.save_state)
 
-        for i in range(11):  
+        for i in range(11):
             self.root.grid_columnconfigure(i, weight=1)
-        for i in range(12):  
+        for i in range(12):
             self.root.grid_rowconfigure(i, weight=1)
+
+        def get_cell_coordinates(self, widget):
+            for (row, col), entry in self.cells.items():
+                if entry == widget:
+                    return row, col
+            return None
+
+        def get_cell_value(self, cell_ref):
+            row_col = self.convert_cell_reference(cell_ref)
+            if row_col and row_col in self.cells:
+                return self.cells[row_col].get()
+            return None
+
+        def convert_cell_reference(self, cell_ref):
+            if len(cell_ref) < 2:
+                return None
+
+            col = ord(cell_ref[0].upper()) - ord('A') + 1
+            try:
+                row = int(cell_ref[1:])
+                return row, col
+            except ValueError:
+                return None
+
+
+
 
     def process_formula(self, event):
         widget = event.widget
@@ -214,21 +368,156 @@ class ExcelApp:
             return
 
         formula = formula[1:]
-        if '+' in formula:
-            self.calculate_sum(cell, formula)
-        elif '*' in formula:
-            self.calculate_product(cell, formula)
+        if formula.lower().startswith('sum(') and formula.endswith(')'):
+            self.calculate_sum(cell, formula[4:-1])
+        elif formula.lower().startswith('prd(') and formula.endswith(')'):
+            self.calculate_product(cell, formula[4:-1])
         elif formula.lower().startswith('avr(') and formula.endswith(')'):
             self.calculate_average(cell, formula[4:-1])
         elif formula.lower().startswith('max(') and formula.endswith(')'):
             self.calculate_max(cell, formula[4:-1])
         elif formula.lower().startswith('min(') and formula.endswith(')'):
             self.calculate_min(cell, formula[4:-1])
+        elif formula.lower().startswith('det(') and formula.endswith(')'):
+            self.calculate_detraction(cell, formula[4:-1])
+        elif formula.lower().startswith('mod(') and formula.endswith(')'):
+            self.calculate_modul(cell, formula[4:-1])
+        elif formula.lower().startswith('pow(') and formula.endswith(')'):
+            self.calculate_power(cell, formula[4:-1])
+        elif formula.lower().startswith('sumif(') and formula.endswith(')'):
+            self.calculate_sumif(cell, formula[6:-1])
+        elif formula.lower().startswith('prdif(') and formula.endswith(')'):
+            self.calculate_productif(cell, formula[6:-1])
+        elif formula.lower().startswith('avrif(') and formula.endswith(')'):
+            self.calculate_avrif(cell, formula[6:-1])
         else:
             messagebox.showerror("Error", "Invalid formula.")
 
+    def calculate_sumif(self, cell, formula):
+        first_division = formula.split(';')
+
+
+        if len(first_division) != 2:
+            messagebox.showerror("Error", "sumif formula requires exactly two arguments separated by ';'.")
+            return
+
+        condition = first_division[0].strip()
+        cell_refs = first_division[1].split(',')
+
+        condition_match = re.match(r'^(-?\d+(\.\d+)?)(>|<|=)$', condition)
+        if not condition_match:
+            messagebox.showerror("Error", "Invalid condition format. Correct format: number followed by >, <, or =.")
+            return
+
+        condition_value = float(condition_match.group(1))
+        operator = condition_match.group(3)
+        total_sum = 0.0
+
+        for cell_ref in cell_refs:
+            cell_ref = cell_ref.strip()
+            try:
+                value_str = self.get_cell_value(cell_ref)
+                value = float(value_str)
+
+                if ((operator == '<' and value > condition_value) or
+                        (operator == '>' and value < condition_value) or
+                        (operator == '=' and value == condition_value)):
+                    total_sum += value
+
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid number in cell {cell_ref}.")
+                return
+
+        self.cells[cell].delete(0, tk.END)
+        self.cells[cell].insert(0, str(total_sum))
+
+    def calculate_productif(self, cell, formula):
+        first_division = formula.split(';')
+
+        if len(first_division) != 2:
+            messagebox.showerror("Error", "prdif formula requires exactly two arguments separated by ';'.")
+            return
+
+        condition = first_division[0].strip()
+        cell_refs = first_division[1].split(',')
+
+
+        condition_match = re.match(r'^(-?\d+(\.\d+)?)(>|<|=)$', condition)
+        if not condition_match:
+            messagebox.showerror("Error", "Invalid condition format. Correct format: number followed by >, <, or =.")
+            return
+
+        condition_value = float(condition_match.group(1))
+        operator = condition_match.group(3)
+        total_prd = 1.0
+
+        for cell_ref in cell_refs:
+            cell_ref = cell_ref.strip()
+            try:
+                value_str = self.get_cell_value(cell_ref)
+                value = float(value_str)
+
+
+                if ((operator == '<' and value > condition_value) or
+                        (operator == '>' and value < condition_value) or
+                        (operator == '=' and value == condition_value)):
+                    total_prd *= value
+
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid number in cell {cell_ref}.")
+                return
+
+        self.cells[cell].delete(0, tk.END)
+        self.cells[cell].insert(0, str(total_prd))
+
+    def calculate_avrif(self, cell, formula):
+        first_division = formula.split(';')
+
+
+        if len(first_division) != 2:
+            messagebox.showerror("Error", "avrif formula requires exactly two arguments separated by ';'.")
+            return
+
+        condition = first_division[0].strip()
+        cell_refs = first_division[1].split(',')
+
+        condition_match = re.match(r'^(-?\d+(\.\d+)?)(>|<|=)$', condition)
+        if not condition_match:
+            messagebox.showerror("Error", "Invalid condition format. Correct format: number followed by >, <, or =.")
+            return
+
+        condition_value = float(condition_match.group(1))
+        operator = condition_match.group(3)
+        total_avr = 0.0
+        count = 0
+
+        for cell_ref in cell_refs:
+            cell_ref = cell_ref.strip()
+            try:
+                value_str = self.get_cell_value(cell_ref)
+                value = float(value_str)
+
+                if ((operator == '<' and value > condition_value) or
+                        (operator == '>' and value < condition_value) or
+                        (operator == '=' and value == condition_value)):
+                    total_avr += value
+                    count+=1
+
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid number in cell {cell_ref}.")
+                return
+        if count > 0:
+            average = total_avr / count
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(average))
+        else:
+            messagebox.showerror("Error", "No valid cells to average.")
+
+
+
+
     def calculate_sum(self, cell, formula):
-        cell_refs = formula.split('+')
+        cell_refs = formula.split(',')
         total_sum = 0.0
         for cell_ref in cell_refs:
             cell_ref = cell_ref.strip()
@@ -241,12 +530,12 @@ class ExcelApp:
             except KeyError:
                 messagebox.showerror("Error", f"Invalid cell reference: {cell_ref}.")
                 return
-        
+
         self.cells[cell].delete(0, tk.END)
         self.cells[cell].insert(0, str(total_sum))
 
     def calculate_product(self, cell, formula):
-        cell_refs = formula.split('*')
+        cell_refs = formula.split(',')
         total_product = 1.0
         for cell_ref in cell_refs:
             cell_ref = cell_ref.strip()
@@ -259,7 +548,7 @@ class ExcelApp:
             except KeyError:
                 messagebox.showerror("Error", f"Invalid cell reference: {cell_ref}.")
                 return
-        
+
         self.cells[cell].delete(0, tk.END)
         self.cells[cell].insert(0, str(total_product))
 
@@ -279,14 +568,13 @@ class ExcelApp:
             except KeyError:
                 messagebox.showerror("Error", f"Invalid cell reference: {cell_ref}.")
                 return
-        
-        if count == 0:
-            messagebox.showerror("Error", "No valid cells to calculate average.")
-            return
-        
-        average = total_sum / count
-        self.cells[cell].delete(0, tk.END)
-        self.cells[cell].insert(0, str(average))
+
+        if count > 0:
+            average = total_sum / count
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(average))
+        else:
+            messagebox.showerror("Error", "No valid cells to average.")
 
     def calculate_max(self, cell, formula):
         cell_refs = formula.split(',')
@@ -302,14 +590,13 @@ class ExcelApp:
             except KeyError:
                 messagebox.showerror("Error", f"Invalid cell reference: {cell_ref}.")
                 return
-        
-        if not values:
-            messagebox.showerror("Error", "No valid cells to calculate maximum.")
-            return
-        
-        max_value = max(values)
-        self.cells[cell].delete(0, tk.END)
-        self.cells[cell].insert(0, str(max_value))
+
+        if values:
+            max_value = max(values)
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(max_value))
+        else:
+            messagebox.showerror("Error", "No valid cells to find the maximum.")
 
     def calculate_min(self, cell, formula):
         cell_refs = formula.split(',')
@@ -325,24 +612,91 @@ class ExcelApp:
             except KeyError:
                 messagebox.showerror("Error", f"Invalid cell reference: {cell_ref}.")
                 return
-        
-        if not values:
-            messagebox.showerror("Error", "No valid cells to calculate minimum.")
+
+        if values:
+            min_value = min(values)
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(min_value))
+        else:
+            messagebox.showerror("Error", "No valid cells to find the minimum.")
+
+    def calculate_detraction(self, cell, formula):
+        cell_refs = formula.split(",")
+        total_det = 0.0
+        if len(cell_refs) != 2:
+            messagebox.showerror("Error", f"The formula must contain exactly two cell references.")
+
+        cell_ref1 = cell_refs[0].strip()
+        cell_ref2 = cell_refs[1].strip()
+
+        try:
+            value1 = self.get_cell_value(cell_ref1)
+            value2 = self.get_cell_value(cell_ref2)
+            total_det = float(value1) - float(value2)
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(total_det))
+
+            total_det = float(value1) - float(value2)
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(total_det))
+        except ValueError:
+            messagebox.showerror("Error", f"Invalid number in cell {cell_ref1}.")
             return
-        
-        min_value = min(values)
-        self.cells[cell].delete(0, tk.END)
-        self.cells[cell].insert(0, str(min_value))
 
-    def get_cell_value(self, cell_ref):
-        row, col = self.cell_ref_to_indices(cell_ref)
-        value = self.cells[(row, col)].get()
-        return float(value)
+        except KeyError:
+            messagebox.showerror("Error", f"Invalid cell reference: {cell_ref1}.")
+            return
 
-    def cell_ref_to_indices(self, cell_ref):
-        col = ord(cell_ref[0].upper()) - ord('A') + 1
-        row = int(cell_ref[1:])
-        return row, col
+    def calculate_modul(self, cell, formula):
+        cell_refs = formula.split(",")
+        total_det = 0.0
+        if len(cell_refs) != 2:
+            messagebox.showerror("Error", f"The formula must contain exactly two cell references.")
+
+        cell_ref1 = cell_refs[0].strip()
+        cell_ref2 = cell_refs[1].strip()
+
+        try:
+            value1 = self.get_cell_value(cell_ref1)
+            value2 = self.get_cell_value(cell_ref2)
+            total_det = float(value1) - float(value2)
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(total_det))
+
+            total_det = float(value1) / float(value2)
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, str(total_det))
+        except ValueError:
+            messagebox.showerror("Error", f"Invalid number in cell {cell_ref1}.")
+            return
+
+        except KeyError:
+            messagebox.showerror("Error", f"Invalid cell reference: {cell_ref1}.")
+            return
+
+    def calculate_power(self, cell, formula):
+        cell_refs = formula.split(",")
+        total_det = 0.0
+        if len(cell_refs) != 2:
+            messagebox.showerror("Error", f"The formula must contain exactly two cell references.")
+        else:
+            cell_ref1 = cell_refs[0].strip()
+            cell_ref2 = cell_refs[1].strip()
+
+            try:
+                value1 = self.get_cell_value(cell_ref1)
+                value2 = self.get_cell_value(cell_ref2)
+                total_det = pow(float(value1), float(value2))
+                self.cells[cell].delete(0, tk.END)
+                self.cells[cell].insert(0, str(total_det))
+
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid number in cell {cell_ref1}.")
+                return
+
+            except KeyError:
+                messagebox.showerror("Error", f"Invalid cell reference: {cell_ref1}.")
+                return
 
     def get_cell_coordinates(self, widget):
         for (row, col), entry in self.cells.items():
@@ -350,32 +704,56 @@ class ExcelApp:
                 return row, col
         return None
 
+    def get_cell_value(self, cell_ref):
+        row_col = self.convert_cell_reference(cell_ref)
+        if row_col and row_col in self.cells:
+            return self.cells[row_col].get()
+        return None
+
+    def convert_cell_reference(self, cell_ref):
+        if len(cell_ref) < 2:
+            return None
+
+        col = ord(cell_ref[0].upper()) - ord('A') + 1
+        try:
+            row = int(cell_ref[1:])
+            return row, col
+        except ValueError:
+            return None
+
+    def save_state(self, event=None):
+        state = {key: entry.get() for key, entry in self.cells.items()}
+        self.manager.push(state)
+
+    def undo_action(self):
+        state = self.manager.undo()
+        if state is not None:
+            for key, value in state.items():
+                self.cells[key].delete(0, tk.END)
+                self.cells[key].insert(0, value)
+
+    def redo_action(self):
+        state = self.manager.redo()
+        if state is not None:
+            for key, value in state.items():
+                self.cells[key].delete(0, tk.END)
+                self.cells[key].insert(0, value)
+
     def save_file(self):
-        file_path = tk.filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
-            try:
-                with open(file_path, 'w', newline='') as file:
-                    writer = csv.writer(file)
-                    for row in range(1, 11):
-                        row_data = []
-                        for col in range(1, 11):
-                            value = self.cells[(row, col)].get()
-                            row_data.append(value)
-                        writer.writerow(row_data)
-                messagebox.showinfo("Success", "File saved successfully.")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save file: {str(e)}")
+            with open(file_path, 'w', newline='') as file:
+                writer = csv.writer(file)
+                for row in range(1, 11):
+                    writer.writerow([self.cells.get((row, col), '').get() for col in range(1, 11)])
 
     def load_file(self):
-        file_path = tk.filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
-            try:
-                with open(file_path, 'r') as file:
-                    reader = csv.reader(file)
-                    for row_idx, row_data in enumerate(reader):
-                        for col_idx, value in enumerate(row_data):
-                            self.cells[(row_idx + 1, col_idx + 1)].delete(0, tk.END)
-                            self.cells[(row_idx + 1, col_idx + 1)].insert(0, value)
-                messagebox.showinfo("Success", "File loaded successfully.")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to load file: {str(e)}")
+            with open(file_path, 'r') as file:
+                reader = csv.reader(file)
+                for row_index, row in enumerate(reader, start=1):
+                    for col_index, cell_value in enumerate(row, start=1):
+                        if (row_index, col_index) in self.cells:
+                            self.cells[(row_index, col_index)].delete(0, tk.END)
+                            self.cells[(row_index, col_index)].insert(0, cell_value)
