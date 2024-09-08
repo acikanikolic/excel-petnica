@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, font, colorchooser
 import csv
-from .undo_and_redo import UndoRedoManager
+from logic.undo_and_redo import UndoRedoManager
 import re
 
 class ExcelApp:
@@ -536,7 +536,42 @@ class ExcelApp:
         except ValueError:
             return None
 
+    def update_cell_value(self, row, col, value):
+        entry = self.cells[(row, col)]
+        if value.startswith('='):
+            formula = value[1:]
+            result = self.process_formula(formula)
+            if result is not None:
+                entry.delete(0, tk.END)
+                entry.insert(0, result)
+                return
+        entry.delete(0, tk.END)
+        entry.insert(0, value)
 
+    def set_cell_value(self, cell, value):
+        if cell in self.cells:
+            self.cells[cell].delete(0, tk.END)
+            self.cells[cell].insert(0, value)
+
+    def calculate_obj(self, cell_ref):
+        cell_ref = cell_ref.upper()
+        cell_coords = self.parse_cell_reference(cell_ref)
+        if cell_coords:
+            row, col = cell_coords
+            cell_value = self.get_cell_value(row, col)
+            return cell_value
+        else:
+            return "ERROR"
+
+    def connecting_cell(self, cell_ref):
+        if self.is_cell_reference(cell_ref):
+            value = self.get_cell_value(cell_ref)
+            if value is not None:
+                self.cells[self.current_cell].set(value)
+            else:
+                print(f"Invalid cell reference: {cell_ref}")
+        else:
+            print(f"Invalid cell reference format: {cell_ref}")
     #formule
 
     def process_formula(self, event):
@@ -550,6 +585,7 @@ class ExcelApp:
             return
 
         formula = formula[1:]
+
         if formula.lower().startswith('sum(') and formula.endswith(')'):
             self.calculate_sum(cell, formula[4:-1])
         elif formula.lower().startswith('prd(') and formula.endswith(')'):
@@ -572,8 +608,15 @@ class ExcelApp:
             self.calculate_productif(cell, formula[6:-1])
         elif formula.lower().startswith('avrif(') and formula.endswith(')'):
             self.calculate_avrif(cell, formula[6:-1])
+        elif formula.lower().startswith('obj(') and formula.endswith(')'):
+            cell_ref = formula[4:-1]  # Uklanja 'OBJ(' i ')'
+            result = self.calculate_obj(cell_ref)
         else:
-            messagebox.showerror("Error", "Invalid formula.")
+            result = self.get_cell_value(formula)
+            self.cells[cell].delete(0, tk.END)
+
+            self.cells[cell].insert(0, str(result))
+
 
     def calculate_sumif(self, cell, formula):
         first_division = formula.split(';')
